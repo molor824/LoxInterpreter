@@ -1,0 +1,13 @@
+var n = 1000;
+var fizz = 3;
+var buzz = 5;
+{
+var i = 1;
+while (i <= n) {
+    if (i % (fizz * buzz) == 0) print("FizzBuzz");
+    else if (i % fizz == 0) print("Fizz");
+    else if (i % buzz == 0) print("Buzz");
+    else print(i);
+    i = i + 1;
+}
+}

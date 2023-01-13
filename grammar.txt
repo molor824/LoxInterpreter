@@ -1,0 +1,31 @@
+precedence:
+1. number, string, boolean, nil, grouping
+2. unary operators
+3. factor
+4. term
+5. comparison
+6. equality
+7. expression
+
+program: declaration* EOF;
+declaration: varDecl | statement;
+varDecl: 'var' IDENT ('=' expression)? ';';
+statement: exprStmt | printStmt | block | ifStmt | whileStmt | forStmt | breakStmt | continueStmt;
+breakStmt: 'break;';
+continueStmt: 'continue;';
+ifStmt: 'if' expression statement ('else' statement)?;
+whileStmt: 'while' expression statement ('else' statement)?;
+forStmt: 'for' (exprStmt | varDecl | ';') expression? ';' expression? statement ('else' statement)?;
+block: "{" declaration* "}";
+exprStmt: expression ';';
+printStmt: 'print(' expression ');'
+expression: assignment;
+assignment: orLogic '=' assignment | orLogic;
+orLogic: andLogic ("||" andLogic)*;
+andLogic: equality ("&&" equality)*;
+equality: comparison (('==' | '!=') comparison)*;
+comparison: term (('<' | '>' | '<=' | '>=') term)*;
+term: factor (('+' | '-') factor)*;
+factor: unary (('*' | '/' | '%') unary)*;
+unary: ('!' | '-') unary | primary;
+primary: NUMBER | STRING | 'true' | 'false' | 'nil' | '(' expression ')' | IDENT;
