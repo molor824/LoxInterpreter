@@ -14,7 +14,7 @@ let expressions = {
     Variable: { Name: "Token.Ident" },
     Assign: { RValue: "Expr.Variable", LValue: "Expr" },
     Call: { Callee: "Expr", Paren: "Token.Symbol", Args: "List<Expr>" },
-    Function: { Parameters: "List<Token.Ident>", Body: "Stmt.Block" },
+    Function: { Parameters: "List<Token.Ident>", Body: "Stmt" },
     Nil: { _STR: 'return "nil";' },
 };
 

@@ -254,9 +254,9 @@ public partial class Parser
         if (result is Token.Ident { Value: "fn" })
         {
             if (!Parameter(out var funcExpr)) throw LeftBracketErr(result.Index + result.Length);
-            if (!Block(out var blockStmt)) throw LeftCurlyErr(funcExpr.Index + funcExpr.Length);
+            if (!Statement(out var stmt)) throw LeftCurlyErr(funcExpr.Index + funcExpr.Length);
 
-            funcExpr.Body = blockStmt;
+            funcExpr.Body = stmt;
             funcExpr.Length = funcExpr.Index + funcExpr.Length - result.Index;
             funcExpr.Index = result.Index;
 

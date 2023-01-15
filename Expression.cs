@@ -137,9 +137,9 @@ public override int Length {get=>_length;set=>_length=value;}
 }
 public class Function : Expr {
 public List<Token.Ident> Parameters;
-public Stmt.Block Body;
+public Stmt Body;
 int _index, _length;
-public Function(List<Token.Ident> parameters, Stmt.Block body, int index, int length) {
+public Function(List<Token.Ident> parameters, Stmt body, int index, int length) {
 this.Parameters = parameters;
 this.Body = body;
 _index = index;

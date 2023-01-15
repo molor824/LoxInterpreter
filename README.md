@@ -3,7 +3,7 @@
 * Example:
 ```go
 var fib = fn(n) {
-    var a = 0;
+    var a = 0.0;
     var b = 1;
     var c;
 
@@ -19,6 +19,8 @@ var fib = fn(n) {
 for (var i = 0; i < 10; i++) {
     print(i, fib(i));
 }
+
+print((fn(n) <- n + "possible!!!";)("anonymous functions are "));
 ```
 ```
 0 0 
@@ -31,4 +33,5 @@ for (var i = 0; i < 10; i++) {
 7 13
 8 21
 9 34
+anonymous functions are possible!!!
 ```
