@@ -254,9 +254,16 @@ public partial class Parser
         if (result is Token.Ident { Value: "fn" })
         {
             if (!Parameter(out var funcExpr)) throw LeftBracketErr(result.Index + result.Length);
-            if (!Statement(out var stmt)) throw LeftCurlyErr(funcExpr.Index + funcExpr.Length);
+            if (!Block(out var stmt))
+            {
+                result = Consume(t => t is Token.Symbol { Value: "=>" }, LeftCurlyErr(funcExpr.Index + funcExpr.Length));
 
-            funcExpr.Body = stmt;
+                if (!Expression(out expr)) throw ExpressionErr(result.Index + result.Length);
+
+                funcExpr.Body = new Stmt.Return(expr, expr.Index, expr.Length);
+            }
+            else funcExpr.Body = stmt;
+
             funcExpr.Length = funcExpr.Index + funcExpr.Length - result.Index;
             funcExpr.Index = result.Index;
 

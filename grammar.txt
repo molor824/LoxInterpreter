@@ -32,4 +32,5 @@ unary: ('!' | '-') unary | increment;
 increment: IDENT ('++' | '--') | call;
 call: primary ('(' arguments? ')')*;
 arguments: expression (',' expression)*;
-primary: NUMBER | STRING | 'true' | 'false' | 'nil' | '(' expression ')' | IDENT | 'fn' parameters;
+function: 'fn' parameters (block | '=>' expression);
+primary: NUMBER | STRING | 'true' | 'false' | 'nil' | '(' expression ')' | IDENT | function;

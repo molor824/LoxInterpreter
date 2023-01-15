@@ -20,7 +20,7 @@ for (var i = 0; i < 10; i++) {
     print(i, fib(i));
 }
 
-print((fn(n) <- n + "possible!!!";)("anonymous functions are "));
+print((fn(n) => n + "possible!!!";)("anonymous functions are "));
 ```
 ```
 0 0 
