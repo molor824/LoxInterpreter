@@ -176,6 +176,11 @@ public class Lexer
 
                 while (_source.TryForward(out result1) && result1 != '"')
                 {
+                    if (result1 == '\n')
+                    {
+                        error = new Error("Incomplete string", _source.Index - 1);
+                        return false;
+                    }
                     if (result1 == '\\' && _source.PeekNext(out result1) && result1 == '"')
                         _source.Index++;
                 }

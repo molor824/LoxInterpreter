@@ -1,9 +1,9 @@
-using System.Collections.Generic;
+using System.Diagnostics;
 
 public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
 {
-    static Dictionary<Type, HashSet<Type>> ImplicitCastMap = new();
-    static Dictionary<(Type, Type), Func<object, object>> ImplicitCastings = new()
+    public static Dictionary<Type, List<Type>> ImplicitCastMap = new();
+    public static Dictionary<(Type, Type), Func<object, object>> ImplicitCastings = new()
     {
         {(typeof(long), typeof(double)), a => (double)(long)a},
         {(typeof(char), typeof(long)), a => (long)(char)a},
@@ -12,10 +12,10 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
     };
     static Dictionary<(Type, string), Func<object, object>> UnaryOperators = new()
     {
-        {(typeof(bool), "!"), a => !(bool)a!},
-        {(typeof(long), "!"), a => ~(long)a!},
-        {(typeof(long), "-"), a => -(long)a!},
-        {(typeof(double), "-"), a => -(double)a!},
+        {(typeof(bool), "!"), a => !((bool)a)},
+        {(typeof(long), "!"), a => ~((long)a)},
+        {(typeof(long), "-"), a => -((long)a)},
+        {(typeof(double), "-"), a => -((double)a)},
     };
     static Dictionary<(Type, string, Type), Func<object, object, object>> BinaryOperators = new()
     {
@@ -61,8 +61,11 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
         {(typeof(bool), "&&", typeof(bool)), (a, b) => (bool)a && (bool)b},
         {(typeof(bool), "||", typeof(bool)), (a, b) => (bool)a || (bool)b},
     };
-    static Environment Environment = new();
+    public static Expr.Nil NilVal = new(0, 0);
+    public static Stopwatch Stopwatch = Stopwatch.StartNew();
+    public static Environment Environment = new();
     static bool Break, Continue;
+    public static object? ReturnValue; // im not using exception for returning value, seems too insane and slow
     static int Loops;
     static Interpreter()
     {
@@ -72,24 +75,37 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
                 value.Add(type1);
             else ImplicitCastMap.Add(type0, new() { type1 });
         }
+
+        InitNativeFunc();
+    }
+    public static void InitNativeFunc()
+    {
+        Environment.RootScope.Declare("printf", new Printf(), 0);
+        Environment.RootScope.Declare("print", new Print(), 0);
+        Environment.RootScope.Declare("clock", new Clock(), 0);
     }
     public void Interpret(List<Stmt> statements)
     {
         foreach (var stmt in statements)
         {
-            Execute(stmt);
+            stmt.Accept(this);
         }
     }
-    void Execute(Stmt stmt) => stmt.Accept(this);
-    public object Eval(Expr expr) => expr.Accept(this);
+    Void Stmt.IVisitor<Void>.visitReturn(Stmt.Return stmt)
+    {
+        ReturnValue = stmt.Value?.Accept(this);
+        return new();
+    }
     Void Stmt.IVisitor<Void>.visitBlock(Stmt.Block stmt)
     {
         var parent = Environment;
         Environment = new Environment(Environment);
 
-        foreach (var statement in stmt.Statements)
+        for (var i = 0; i < stmt.Statements.Count; i++)
         {
-            Execute(statement);
+            stmt.Statements[i].Accept(this);
+
+            if (ReturnValue != null) break;
             if (Loops > 0 && (Break || Continue)) break;
         }
 
@@ -99,22 +115,17 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
     }
     Void Stmt.IVisitor<Void>.visitExpression(Stmt.Expression stmt)
     {
-        Eval(stmt.Expr);
-        return new();
-    }
-    Void Stmt.IVisitor<Void>.visitPrint(Stmt.Print stmt)
-    {
-        Console.WriteLine(Eval(stmt.Expr));
+        stmt.Expr.Accept(this);
         return new();
     }
     Void Stmt.IVisitor<Void>.visitVarDecl(Stmt.VarDecl stmt)
     {
-        Environment.Declare(stmt.Name.Value, Eval(stmt.Expr), stmt.Name.Index);
+        Environment.Declare(stmt.Name.Value, stmt.Expr.Accept(this), stmt.Name.Index);
         return new();
     }
     Void Stmt.IVisitor<Void>.visitIf(Stmt.If stmt)
     {
-        var evalCondition = Eval(stmt.Condition);
+        var evalCondition = stmt.Condition.Accept(this);
 
         if (evalCondition is not bool)
             if (!ImplicitCastMap.TryGetValue(evalCondition.GetType(), out var types) || !types.Contains(typeof(bool)))
@@ -123,10 +134,10 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
 
         if (evalCondition is true)
         {
-            Execute(stmt.MetStmt);
+            stmt.MetStmt.Accept(this);
             return new();
         }
-        if (stmt.ElseStmt != null) Execute(stmt.ElseStmt);
+        if (stmt.ElseStmt != null) stmt.ElseStmt.Accept(this);
 
         return new();
     }
@@ -145,31 +156,32 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
         var parent = Environment;
         Environment = new(parent);
 
-        if (stmt.Initial != null) Execute(stmt.Initial);
+        stmt.Initial?.Accept(this);
 
         Loops++;
         while (true)
         {
-            var evalCondition = stmt.Condition != null ? Eval(stmt.Condition) : (object)true;
+            var evalCondition = stmt.Condition?.Accept(this);
 
-            if (evalCondition is not bool)
+            if (evalCondition is not bool and not null)
                 if (!ImplicitCastMap.TryGetValue(evalCondition.GetType(), out var types) || !types.Contains(typeof(bool)))
                     throw new Error($"Expression cannot implicitly convert to bool", stmt.Condition!.Index);
                 else evalCondition = ImplicitCastings[(evalCondition.GetType(), typeof(bool))](evalCondition);
 
-            if (evalCondition is true)
+            if (evalCondition is true or null)
             {
-                Execute(stmt.LoopStmt);
+                stmt.LoopStmt.Accept(this);
 
+                if (ReturnValue != null) break;
                 if (Break)
                 {
                     Break = false;
-                    if (stmt.ElseStmt != null) Execute(stmt.ElseStmt);
+                    stmt.ElseStmt?.Accept(this);
                     break;
                 }
-                Continue = false;
 
-                if (stmt.Increment != null) Eval(stmt.Increment);
+                Continue = false;
+                stmt.Increment?.Accept(this);
 
                 continue;
             }
@@ -186,7 +198,7 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
         Loops++;
         while (true)
         {
-            var evalCondition = Eval(stmt.Condition);
+            var evalCondition = stmt.Condition.Accept(this);
 
             if (evalCondition is not bool)
                 if (!ImplicitCastMap.TryGetValue(evalCondition.GetType(), out var types) || !types.Contains(typeof(bool)))
@@ -195,13 +207,17 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
 
             if (evalCondition is true)
             {
-                Execute(stmt.LoopStmt);
+                stmt.LoopStmt.Accept(this);
+
+                if (ReturnValue != null)
+                    break;
                 if (Break)
                 {
                     Break = false;
-                    if (stmt.ElseStmt != null) Execute(stmt.ElseStmt);
+                    if (stmt.ElseStmt != null) stmt.ElseStmt.Accept(this);
                     break;
                 }
+
                 Continue = false;
                 continue;
             }
@@ -210,12 +226,28 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
         Loops--;
         return new();
     }
+    object Expr.IVisitor<object>.visitCall(Expr.Call expr)
+    {
+        var callee = expr.Callee.Accept(this);
+
+        if (callee is not ICallable callable) throw new Error("Expected method name", expr.Callee.Index);
+
+        var args = new List<object>();
+        foreach (var arg in expr.Args)
+            args.Add(arg.Accept(this));
+
+        if (callable.Arity >= 0 && callable.Arity != args.Count) throw new Error($"Function does not take {args.Count} parameters", expr.Callee.Index);
+        else if (callable.Arity < 0 && ~callable.Arity > args.Count) throw new Error($"Function must have atleast {~callable.Arity} parameters", expr.Callee.Index);
+
+        return callable.Call(this, args);
+    }
     object Expr.IVisitor<object>.visitAssign(Expr.Assign expr)
     {
-        var value = Eval(expr.LValue);
+        var value = expr.LValue.Accept(this);
         Environment.Assign(expr.RValue.Name, value);
         return value;
     }
+    object Expr.IVisitor<object>.visitFunction(Expr.Function expr) => new LoxFunction(expr, Environment);
     object Expr.IVisitor<object>.visitBoolean(Expr.Boolean expr) => expr.Value;
     object Expr.IVisitor<object>.visitFloat(Expr.Float expr) => expr.Value;
     object Expr.IVisitor<object>.visitInteger(Expr.Integer expr) => expr.Value;
@@ -225,19 +257,31 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
     object Expr.IVisitor<object>.visitVariable(Expr.Variable expr) => Environment.Get(expr.Name);
     object Expr.IVisitor<object>.visitUnary(Expr.Unary expr)
     {
-        var a = Eval(expr.Expr);
+        var a = expr.Expr.Accept(this);
         if (UnaryOperators.TryGetValue((a.GetType(), expr.Op.Value), out var value))
+            return value(a);
+        if (UnaryOperators.TryGetValue((typeof(object), expr.Op.Value), out value))
+            return value(a);
+
+        var casts = ImplicitCastMap.GetValueOrDefault(a.GetType());
+
+        if (casts != null)
         {
-            var result = value(a);
-            return a;
+            foreach (var cast in casts)
+            {
+                var aCastFunc = ImplicitCastings[(a.GetType(), cast)];
+
+                if (UnaryOperators.TryGetValue((cast, expr.Op.Value), out value))
+                    return value(aCastFunc(a));
+            }
         }
 
         throw new Error($"Operator '{expr.Op.Value}' cannot be applied to '{a.GetType().Name}'", expr.Op.Index);
     }
     object Expr.IVisitor<object>.visitBinary(Expr.Binary expr)
     {
-        var a = Eval(expr.Left);
-        var b = Eval(expr.Right);
+        var a = expr.Left.Accept(this);
+        var b = expr.Right.Accept(this);
         if (BinaryOperators.TryGetValue((a.GetType(), expr.Op.Value, b.GetType()), out var value))
         {
             var result = value(a, b);

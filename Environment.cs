@@ -3,6 +3,18 @@ public class Environment
     public Environment? ParentScope;
     public Dictionary<string, object> Variables = new();
 
+    public Environment RootScope
+    {
+        get
+        {
+            var root = this;
+
+            while (root.ParentScope != null) root = root.ParentScope;
+
+            return root;
+        }
+    }
+
     public Environment(Environment? parentScope = null)
     {
         ParentScope = parentScope;

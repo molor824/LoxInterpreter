@@ -1,11 +1,23 @@
 public class AstPrinter : Expr.IVisitor<string>, Stmt.IVisitor<string>
 {
+    string Expr.IVisitor<string>.visitFunction(Expr.Function stmt)
+    {
+        var parameters = "";
+        for (var i = 0; i < stmt.Parameters.Count; i++)
+        {
+            if (i != 0) parameters += ", ";
+            parameters += stmt.Parameters[i].Value;
+        }
+
+        return $"func({parameters}) {stmt.Body.Accept(this)}";
+    }
+    string Stmt.IVisitor<string>.visitReturn(Stmt.Return stmt) => $"return {stmt.Value?.Accept(this)};";
     string Stmt.IVisitor<string>.visitBlock(Stmt.Block stmt)
     {
         var output = "{\n";
         foreach (var statement in stmt.Statements)
         {
-            output += "  " + statement.Accept(this).Replace("\n", "\n  ");
+            output += "  " + statement.Accept(this).Replace("\n", "\n  ") + '\n';
         }
         return output + "\n}";
     }
@@ -23,15 +35,11 @@ public class AstPrinter : Expr.IVisitor<string>, Stmt.IVisitor<string>
     }
     string Stmt.IVisitor<string>.visitFor(Stmt.For stmt)
     {
-        return $"For({stmt.Initial?.Accept(this)};{stmt.Condition?.Accept(this)};{stmt.Increment?.Accept(this)}) {stmt.LoopStmt.Accept(this)} else {stmt.ElseStmt?.Accept(this)}";
+        return $"For({stmt.Initial?.Accept(this)};{stmt.Condition?.Accept(this)};{stmt.Increment?.Accept(this)}){stmt.LoopStmt.Accept(this)}{(stmt.ElseStmt != null ? " else " + stmt.ElseStmt.Accept(this) : "")}";
     }
     string Stmt.IVisitor<string>.visitIf(Stmt.If stmt)
     {
-        return $"If({stmt.Condition.Accept(this)}) {stmt.MetStmt.Accept(this)} else {stmt.ElseStmt?.Accept(this)}";
-    }
-    string Stmt.IVisitor<string>.visitPrint(Stmt.Print stmt)
-    {
-        return $"Print({stmt.Expr.Accept(this)})";
+        return $"If({stmt.Condition.Accept(this)}) {stmt.MetStmt.Accept(this)}{(stmt.ElseStmt != null ? " else " + stmt.ElseStmt.Accept(this) : "")}";
     }
     string Stmt.IVisitor<string>.visitVarDecl(Stmt.VarDecl stmt)
     {
@@ -39,7 +47,19 @@ public class AstPrinter : Expr.IVisitor<string>, Stmt.IVisitor<string>
     }
     string Stmt.IVisitor<string>.visitWhile(Stmt.While stmt)
     {
-        return $"While({stmt.Condition.Accept(this)}) {stmt.LoopStmt.Accept(this)} else {stmt.ElseStmt?.Accept(this)}";
+        return $"While({stmt.Condition.Accept(this)}) {stmt.LoopStmt.Accept(this)}{(stmt.ElseStmt != null ? " else " + stmt.ElseStmt.Accept(this) : "")}";
+    }
+    string Expr.IVisitor<string>.visitCall(Expr.Call expr)
+    {
+        var args = "";
+
+        for (var i = 0; i < expr.Args.Count; i++)
+        {
+            if (i != 0) args += ", ";
+            args += expr.Args[i].Accept(this);
+        }
+
+        return $"{expr.Callee.Accept(this)}({args})";
     }
     string Expr.IVisitor<string>.visitAssign(Expr.Assign expr)
     {

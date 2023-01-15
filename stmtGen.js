@@ -5,12 +5,12 @@ function iterDict(dict, iterLambda) {
 }
 let statements = {
     Expression: { Expr: "Expr" },
-    Print: { Expr: "Expr" },
     VarDecl: { Name: "Token.Ident", Expr: "Expr" },
     Block: { Statements: "List<Stmt>" },
     If: { Condition: "Expr", MetStmt: "Stmt", ElseStmt: "Stmt?" },
     While: { Condition: "Expr", LoopStmt: "Stmt", ElseStmt: "Stmt?" },
     For: { Initial: "Stmt?", Condition: "Expr?", Increment: "Expr?", LoopStmt: "Stmt", ElseStmt: "Stmt?" },
+    Return: { Value: "Expr?" },
     Break: {},
     Continue: {},
 };

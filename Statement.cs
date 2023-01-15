@@ -16,19 +16,6 @@ public override T Accept<T>(IVisitor<T> visitor) => visitor.visitExpression(this
 public override int Index{get=>_index;set=>_index=value;}
 public override int Length{get=>_length;set=>_length=value;}
 }
-public class Print : Stmt {
-public Expr Expr;
-int _index;
-int _length;
-public Print(Expr expr, int index, int length) {
-this.Expr = expr;
-_index = index;
-_length = length;
-}
-public override T Accept<T>(IVisitor<T> visitor) => visitor.visitPrint(this);
-public override int Index{get=>_index;set=>_index=value;}
-public override int Length{get=>_length;set=>_length=value;}
-}
 public class VarDecl : Stmt {
 public Token.Ident Name;
 public Expr Expr;
@@ -112,6 +99,19 @@ public override T Accept<T>(IVisitor<T> visitor) => visitor.visitFor(this);
 public override int Index{get=>_index;set=>_index=value;}
 public override int Length{get=>_length;set=>_length=value;}
 }
+public class Return : Stmt {
+public Expr? Value;
+int _index;
+int _length;
+public Return(Expr? value, int index, int length) {
+this.Value = value;
+_index = index;
+_length = length;
+}
+public override T Accept<T>(IVisitor<T> visitor) => visitor.visitReturn(this);
+public override int Index{get=>_index;set=>_index=value;}
+public override int Length{get=>_length;set=>_length=value;}
+}
 public class Break : Stmt {
 int _index;
 int _length;
@@ -136,12 +136,12 @@ public override int Length{get=>_length;set=>_length=value;}
 }
 public interface IVisitor<T> {
 T visitExpression(Stmt.Expression stmt);
-T visitPrint(Stmt.Print stmt);
 T visitVarDecl(Stmt.VarDecl stmt);
 T visitBlock(Stmt.Block stmt);
 T visitIf(Stmt.If stmt);
 T visitWhile(Stmt.While stmt);
 T visitFor(Stmt.For stmt);
+T visitReturn(Stmt.Return stmt);
 T visitBreak(Stmt.Break stmt);
 T visitContinue(Stmt.Continue stmt);
 }

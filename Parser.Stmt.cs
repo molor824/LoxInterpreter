@@ -1,10 +1,6 @@
-using System.Globalization;
-
-public class Parser
+partial class Parser
 {
-    static readonly Expr NilExpr = new Expr.Nil(0, 0);
-
-    Iterator<List<Token>, Token> _token;
+    const int ArgLimit = 255;
 
     Error IdentErr(int index) => new("Expected identifier", index);
     Error ExpressionErr(int index) => new("Expected expression", index);
@@ -13,7 +9,7 @@ public class Parser
     Error RightBracketErr(int index) => new("Expected ')'", index);
     Error LeftBracketErr(int index) => new("Expected '('", index);
     Error SemicolonErr(int index) => new("Expected ';'", index);
-    Error ExpectedErr(string what, int index) => new($"Expected {what}", index);
+    Error ArgLimitErr(int index) => new($"Cannot have more than {ArgLimit} arguments", index);
 
     bool Match(Func<Token, bool> compare, out Token result)
     {
@@ -21,22 +17,11 @@ public class Parser
         if (peekSuccess) _token.Index++;
         return peekSuccess;
     }
-    Token Check(Func<Token, bool> compare, Error err)
-    {
-        if (!_token.PeekNext(out var result) || !compare(result))
-            throw err;
-
-        return result;
-    }
     Token Consume(Func<Token, bool> compare, Error err)
     {
         if (!_token.TryForward(out var result) || !compare(result))
             throw err;
         return result;
-    }
-    public Parser(List<Token> tokens)
-    {
-        _token = new(tokens);
     }
 
     public List<Stmt> Parse()
@@ -58,11 +43,6 @@ public class Parser
     }
     bool Statement(out Stmt stmt)
     {
-        if (PrintStmt(out var printStmt))
-        {
-            stmt = printStmt;
-            return true;
-        }
         if (IfStmt(out var ifStmt))
         {
             stmt = ifStmt;
@@ -93,6 +73,11 @@ public class Parser
             stmt = blockStmt;
             return true;
         }
+        if (ReturnStmt(out var returnStmt))
+        {
+            stmt = returnStmt;
+            return true;
+        }
         if (ExprStmt(out var exprStmt))
         {
             stmt = exprStmt;
@@ -100,6 +85,20 @@ public class Parser
         }
         stmt = default!;
         return false;
+    }
+    bool ReturnStmt(out Stmt.Return stmt)
+    {
+        stmt = default!;
+
+        if (!Match(t => t is Token.Symbol { Value: "<-" }, out var result)) return false;
+
+        Expression(out var expr);
+
+        stmt = new Stmt.Return(expr, result.Index, expr.Index + expr.Length + 1 - result.Index);
+
+        Consume(t => t is Token.Symbol { Value: ";" }, SemicolonErr(expr.Index + expr.Length));
+
+        return true;
     }
     bool ForStmt(out Stmt.For stmt)
     {
@@ -198,7 +197,7 @@ public class Parser
         if (!Match(t => t is Token.Ident { Value: "var" }, out var result)) return false;
         var name = Consume(t => t is Token.Ident, IdentErr(result.Index + 3));
 
-        stmt = new Stmt.VarDecl((Token.Ident)name, NilExpr, name.Index, name.Length);
+        stmt = new Stmt.VarDecl((Token.Ident)name, Interpreter.NilVal, name.Index, name.Length);
         if (Match(t => t is Token.Symbol { Value: "=" }, out result))
         {
             if (!Expression(out stmt.Expr)) throw ExpressionErr(result.Index + 1);
@@ -241,190 +240,5 @@ public class Parser
         Consume(t => t is Token.Symbol { Value: ";" }, SemicolonErr(stmt.Index + stmt.Length));
 
         return true;
-    }
-    bool PrintStmt(out Stmt.Print stmt)
-    {
-        stmt = default!;
-
-        if (!Match(t => t is Token.Ident { Value: "print" }, out var result)) return false;
-        result = Consume(t => t is Token.Symbol { Value: "(" }, LeftBracketErr(result.Index + result.Length));
-
-        var exprResult = Expression(out var expr);
-        if (exprResult) stmt = new Stmt.Print(expr, expr.Index, expr.Length);
-
-        result = Consume(t => t is Token.Symbol { Value: ")" }, RightBracketErr(exprResult ? expr.Index + expr.Length : result.Index + 1));
-        Consume(t => t is Token.Symbol { Value: ";" }, SemicolonErr(result.Index + 1));
-
-        return true;
-    }
-    bool Expression(out Expr expr) => Assignment(out expr);
-    bool Assignment(out Expr expr)
-    {
-        if (!OrLogic(out expr)) return false;
-        if (expr is not Expr.Variable) return true;
-        if (!Match(t => t is Token.Symbol { Value: "=" }, out var result)) return true;
-        if (!Assignment(out var lvalue)) throw ExpressionErr(result.Index);
-
-        expr = new Expr.Assign((Expr.Variable)expr, lvalue, expr.Index, lvalue.Index + lvalue.Length - expr.Index);
-
-        return true;
-    }
-    bool OrLogic(out Expr expr)
-    {
-        if (!AndLogic(out expr)) return false;
-
-        while (_token.PeekNext(out var result) && result is Token.Symbol { Value: "||" })
-        {
-            _token.Index++;
-
-            if (!AndLogic(out var right)) throw ExpressionErr(result.Index + 1);
-
-            expr = new Expr.Binary(expr, right, (Token.Symbol)result, expr.Index, right.Index + right.Length - expr.Index);
-        }
-
-        return true;
-    }
-    bool AndLogic(out Expr expr)
-    {
-        if (!Equality(out expr)) return false;
-
-        while (_token.PeekNext(out var result) && result is Token.Symbol { Value: "&&" })
-        {
-            _token.Index++;
-
-            if (!Equality(out var right)) throw ExpressionErr(result.Index + 1);
-
-            expr = new Expr.Binary(expr, right, (Token.Symbol)result, expr.Index, right.Index + right.Length - expr.Index);
-        }
-
-        return true;
-    }
-    bool Equality(out Expr expr)
-    {
-        if (!Comparison(out expr)) return false;
-
-        while (_token.PeekNext(out var result) && result is Token.Symbol { Value: "==" or "!=" })
-        {
-            _token.Index++;
-
-            if (!Comparison(out var right)) throw ExpressionErr(result.Index + 1);
-
-            expr = new Expr.Binary(expr, right, (Token.Symbol)result, expr.Index, right.Index + right.Length - expr.Index);
-        }
-
-        return true;
-    }
-    bool Comparison(out Expr expr)
-    {
-        if (!Term(out expr)) return false;
-
-        while (_token.PeekNext(out var result) && result is Token.Symbol { Value: "<" or ">" or "<=" or ">=" })
-        {
-            _token.Index++;
-
-            if (!Term(out var right)) throw ExpressionErr(result.Index + 1);
-
-            expr = new Expr.Binary(expr, right, (Token.Symbol)result, expr.Index, right.Index + right.Length - expr.Index);
-        }
-
-        return true;
-    }
-    bool Term(out Expr expr)
-    {
-        if (!Factor(out expr)) return false;
-
-        while (_token.PeekNext(out var result) && result is Token.Symbol { Value: "+" or "-" })
-        {
-            _token.Index++;
-
-            if (!Factor(out var right)) throw ExpressionErr(result.Index + 1);
-
-            expr = new Expr.Binary(expr, right, (Token.Symbol)result, expr.Index, right.Index + right.Length - expr.Index);
-        }
-
-        return true;
-    }
-    bool Factor(out Expr expr)
-    {
-        if (!Unary(out expr)) return false;
-
-        while (_token.PeekNext(out var result) && result is Token.Symbol { Value: "*" or "/" or "%" })
-        {
-            _token.Index++;
-
-            if (!Unary(out var right)) throw ExpressionErr(result.Index + 1);
-
-            expr = new Expr.Binary(expr, right, (Token.Symbol)result, expr.Index, right.Index + right.Length - expr.Index);
-        }
-
-        return true;
-    }
-    bool Unary(out Expr expr)
-    {
-        expr = default!;
-
-        if (!_token.PeekNext(out var result)) return false;
-
-        if (result is not Token.Symbol { Value: "!" or "-" })
-            return Primary(out expr);
-
-        _token.Index++;
-
-        if (!Unary(out expr)) throw ExpressionErr(result.Index + 1);
-
-        expr = new Expr.Unary(expr, (Token.Symbol)result, result.Index, expr.Index + expr.Length - result.Index);
-        return true;
-    }
-    bool Primary(out Expr expr)
-    {
-        expr = default!;
-
-        if (!_token.PeekNext(out var result)) return false;
-        _token.Index++;
-
-        if (result is Token.Float floatToken)
-        {
-            expr = new Expr.Float(floatToken.Value, result.Index, result.Length);
-            return true;
-        }
-        if (result is Token.Int intToken)
-        {
-            expr = new Expr.Integer(intToken.Value, result.Index, result.Length);
-            return true;
-        }
-        if (result is Token.Char charToken)
-        {
-            expr = new Expr.Char(charToken.Value, result.Index, result.Length);
-            return true;
-        }
-        if (result is Token.String strToken)
-        {
-            expr = new Expr.String(strToken.Value, result.Index, result.Length);
-            return true;
-        }
-        if (result is Token.Ident { Value: "true" or "false" } boolToken)
-        {
-            expr = new Expr.Boolean(boolToken.Value == "true", result.Index, result.Length);
-            return true;
-        }
-        if (result is Token.Ident { Value: "nil" })
-        {
-            expr = new Expr.Nil(result.Index, result.Length);
-            return true;
-        }
-        if (result is Token.Symbol { Value: "(" })
-        {
-            var exprResult = Expression(out expr);
-            Consume(token => token is Token.Symbol { Value: ")" }, LeftBracketErr(expr.Index + expr.Length));
-            return exprResult;
-        }
-        if (result is Token.Ident varName)
-        {
-            expr = new Expr.Variable(varName, result.Index, result.Length);
-            return true;
-        }
-
-        _token.Index--;
-        return false;
     }
 }

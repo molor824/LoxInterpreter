@@ -1,6 +1,4 @@
-﻿using System.Diagnostics;
-
-static class Program
+﻿static class Program
 {
     public static bool Debug;
 
@@ -35,10 +33,52 @@ static class Program
             Lexer lexer;
             if (path == null)
             {
-                Console.Write("> ");
-                var input = Console.ReadLine();
-                if (input == "exit") break;
+                string? input = null;
+                var loops = 0;
+
+                do
+                {
+                    for (var i = 0; i < loops; i++)
+                        Console.Write(". ");
+
+                    Console.Write("> ");
+
+                    var line = Console.ReadLine();
+
+                    if (line == null) continue;
+                    if (line == "exit") return;
+                    if (line == "reset")
+                    {
+                        Interpreter.Environment.Variables.Clear();
+                        Interpreter.InitNativeFunc();
+                        Console.WriteLine("Resetted.");
+                        continue;
+                    }
+                    if (line == "listVar")
+                    {
+                        var scope = Interpreter.Environment;
+                        while (scope != null)
+                        {
+                            foreach (var variable in Interpreter.Environment.Variables)
+                                Console.WriteLine($"{variable.Key}: {variable.Value}");
+
+                            scope = scope.ParentScope;
+                        }
+
+                        continue;
+                    }
+
+                    foreach (var ch in line)
+                    {
+                        if (ch == '{') loops++;
+                        else if (ch == '}') loops--;
+                    }
+
+                    input += line + '\n';
+                } while (loops > 0);
+
                 if (input == null) continue;
+
                 lexer = new(input);
             }
             else lexer = Lexer.FromPath(path);
