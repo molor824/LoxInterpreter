@@ -11,20 +11,20 @@ public partial class Parser
     bool Assignment(out Expr expr)
     {
         if (!OrLogic(out expr)) return false;
-        if (expr is not Expr.Variable) return true;
+        if (expr is not Expr.Variable and not Expr.Property) return true;
         if (!Match(t => t is Token.Symbol { Value: "=" or "+=" or "-=" or "*=" or "/=" or "%=" or "||=" or "&&=" }, out var result)) return true;
-        if (!Assignment(out var lvalue)) throw ExpressionErr(result.Index);
+        if (!Assignment(out var lvalue)) throw Error.Expression(result.Index);
 
         var assignOp = (Token.Symbol)result;
 
-        expr = new Expr.Assign((Expr.Variable)expr, lvalue, expr.Index, lvalue.Index + lvalue.Length - expr.Index);
+        expr = new Expr.Assign(expr, lvalue, expr.Index, lvalue.Index + lvalue.Length - expr.Index);
         if (assignOp.Value == "=")
             return true;
 
         assignOp.Value = assignOp.Value.Substring(0, assignOp.Value.Length - 1);
 
         var assignExpr = (Expr.Assign)expr;
-        assignExpr.LValue = new Expr.Binary(assignExpr.RValue, lvalue, assignOp, 0, 0);
+        assignExpr.Value = new Expr.Binary(assignExpr.Name, lvalue, assignOp, 0, 0);
 
         return true;
     }
@@ -36,7 +36,7 @@ public partial class Parser
         {
             _token.Index++;
 
-            if (!AndLogic(out var right)) throw ExpressionErr(result.Index + 1);
+            if (!AndLogic(out var right)) throw Error.Expression(result.Index + 1);
 
             expr = new Expr.Binary(expr, right, (Token.Symbol)result, expr.Index, right.Index + right.Length - expr.Index);
         }
@@ -51,7 +51,7 @@ public partial class Parser
         {
             _token.Index++;
 
-            if (!Equality(out var right)) throw ExpressionErr(result.Index + 1);
+            if (!Equality(out var right)) throw Error.Expression(result.Index + 1);
 
             expr = new Expr.Binary(expr, right, (Token.Symbol)result, expr.Index, right.Index + right.Length - expr.Index);
         }
@@ -66,7 +66,7 @@ public partial class Parser
         {
             _token.Index++;
 
-            if (!Comparison(out var right)) throw ExpressionErr(result.Index + 1);
+            if (!Comparison(out var right)) throw Error.Expression(result.Index + 1);
 
             expr = new Expr.Binary(expr, right, (Token.Symbol)result, expr.Index, right.Index + right.Length - expr.Index);
         }
@@ -81,7 +81,7 @@ public partial class Parser
         {
             _token.Index++;
 
-            if (!Term(out var right)) throw ExpressionErr(result.Index + 1);
+            if (!Term(out var right)) throw Error.Expression(result.Index + 1);
 
             expr = new Expr.Binary(expr, right, (Token.Symbol)result, expr.Index, right.Index + right.Length - expr.Index);
         }
@@ -96,7 +96,7 @@ public partial class Parser
         {
             _token.Index++;
 
-            if (!Factor(out var right)) throw ExpressionErr(result.Index + 1);
+            if (!Factor(out var right)) throw Error.Expression(result.Index + 1);
 
             expr = new Expr.Binary(expr, right, (Token.Symbol)result, expr.Index, right.Index + right.Length - expr.Index);
         }
@@ -111,7 +111,7 @@ public partial class Parser
         {
             _token.Index++;
 
-            if (!Unary(out var right)) throw ExpressionErr(result.Index + 1);
+            if (!Unary(out var right)) throw Error.Expression(result.Index + 1);
 
             expr = new Expr.Binary(expr, right, (Token.Symbol)result, expr.Index, right.Index + right.Length - expr.Index);
         }
@@ -129,7 +129,7 @@ public partial class Parser
 
         _token.Index++;
 
-        if (!Unary(out expr)) throw ExpressionErr(result.Index + 1);
+        if (!Unary(out expr)) throw Error.Expression(result.Index + 1);
 
         expr = new Expr.Unary(expr, (Token.Symbol)result, result.Index, expr.Index + expr.Length - result.Index);
         return true;
@@ -146,7 +146,7 @@ public partial class Parser
         op.Value = op.Value.Substring(0, op.Value.Length - 1);
 
         var variable = (Expr.Variable)expr;
-        expr = new Expr.Binary(expr, new Expr.Integer(1, 0, 0), op, expr.Index, expr.Length);
+        expr = new Expr.Binary(expr, Parser.One, op, expr.Index, expr.Length);
         expr = new Expr.Assign(variable, expr, variable.Index, result.Index + result.Length - variable.Index);
 
         return true;
@@ -157,8 +157,21 @@ public partial class Parser
 
         if (!Primary(out expr)) return false;
 
-        while (Match(t => t is Token.Symbol { Value: "(" }, out var result))
-            expr = Args(expr);
+        while (true)
+        {
+            if (Match(t => t is Token.Symbol { Value: "(" }, out var result))
+            {
+                var callExpr = (Expr.Call)Args(expr);
+                expr = callExpr;
+                if (callExpr.Callee is Expr.Property prop) callExpr.Args.Insert(0, prop.Instance);
+            }
+            else if (Match(t => t is Token.Symbol { Value: "." }, out result))
+            {
+                var name = Consume(t => t is Token.Ident, Error.Ident(result.Index + result.Length));
+                expr = new Expr.Property((Token.Ident)name, expr, expr.Index, name.Index + name.Length - expr.Index);
+            }
+            else break;
+        }
 
         return true;
     }
@@ -172,20 +185,20 @@ public partial class Parser
         {
             do
             {
-                if (!Expression(out var arg)) throw ExpressionErr(_token.TryCurrent(out result) ? result.Index + result.Length : 0);
+                if (!Expression(out var arg)) throw Error.Expression(_token.TryCurrent(out result) ? result.Index + result.Length : 0);
 
                 args.Add(arg);
                 endIndex = arg.Index + arg.Length;
 
-                if (args.Count > ArgLimit) throw ArgLimitErr(endIndex);
+                if (args.Count > ArgLimit) throw Error.ArgLimit(endIndex);
             } while (Match(t => t is Token.Symbol { Value: "," }, out result));
 
-            result = Consume(t => t is Token.Symbol { Value: ")" }, RightBracketErr(endIndex));
+            result = Consume(t => t is Token.Symbol { Value: ")" }, Error.RightBracket(endIndex));
         }
 
         return new Expr.Call(callee, (Token.Symbol)result, args, startIndex, endIndex - startIndex);
     }
-    bool Parameter(out Expr.Function expr)
+    bool Parameter(out Expr expr)
     {
         expr = default!;
 
@@ -199,18 +212,18 @@ public partial class Parser
         {
             do
             {
-                if (!Match(t => t is Token.Ident, out result)) throw IdentErr(endIndex);
+                if (!Match(t => t is Token.Ident, out result)) throw Error.Ident(endIndex);
 
                 parameters.Add((Token.Ident)result);
                 endIndex = result.Index + result.Length;
             } while (Match(t => t is Token.Symbol { Value: "," }, out var _));
 
-            result = Consume(t => t is Token.Symbol { Value: ")" }, RightBracketErr(endIndex));
+            result = Consume(t => t is Token.Symbol { Value: ")" }, Error.RightBracket(endIndex));
         }
 
         endIndex = result.Index + result.Length;
 
-        expr = new(parameters, null!, startIndex, endIndex - startIndex);
+        expr = new Expr.Function(parameters, null!, startIndex, endIndex - startIndex);
 
         return true;
     }
@@ -253,12 +266,13 @@ public partial class Parser
         }
         if (result is Token.Ident { Value: "fn" })
         {
-            if (!Parameter(out var funcExpr)) throw LeftBracketErr(result.Index + result.Length);
+            if (!Parameter(out expr)) throw Error.LeftBracket(result.Index + result.Length);
+
+            var funcExpr = (Expr.Function)expr;
+
             if (!Block(out var stmt))
             {
-                result = Consume(t => t is Token.Symbol { Value: "=>" }, LeftCurlyErr(funcExpr.Index + funcExpr.Length));
-
-                if (!Expression(out expr)) throw ExpressionErr(result.Index + result.Length);
+                if (!Expression(out expr)) throw Error.RightBracket(result.Index + result.Length);
 
                 funcExpr.Body = new Stmt.Return(expr, expr.Index, expr.Length);
             }
@@ -274,7 +288,7 @@ public partial class Parser
         if (result is Token.Symbol { Value: "(" })
         {
             var exprResult = Expression(out expr);
-            Consume(token => token is Token.Symbol { Value: ")" }, LeftBracketErr(expr.Index + expr.Length));
+            Consume(token => token is Token.Symbol { Value: ")" }, Error.LeftBracket(expr.Index + expr.Length));
             return exprResult;
         }
         if (result is Token.Ident varName)

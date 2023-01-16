@@ -19,36 +19,33 @@ public class Environment
     {
         ParentScope = parentScope;
     }
-    public object Get(Token.Ident name)
+    public void Declare(Token.Ident name, object value)
     {
-        for (var scope = this; scope != null; scope = scope.ParentScope)
-        {
-            if (scope.Variables.TryGetValue(name.Value, out var value)) return value;
-        }
+        if (Variables.ContainsKey(name.Value))
+            throw Error.Undefined(name.Index);
 
-        throw new Error($"Variable {name.Value} does not exist", name.Index);
+        Variables.Add(name.Value, value);
     }
-    public void Declare(string name, object value, int index)
+    Environment? Ancestor(int distance)
     {
-        for (var scope = this; scope != null; scope = scope.ParentScope)
-        {
-            if (scope.Variables.ContainsKey(name))
-                throw new Error($"Variable {name} is already declared", index);
-        }
+        var scope = this;
+        for (var i = 0; i < distance && scope != null; i++)
+            scope = scope.ParentScope;
 
-        Variables.Add(name, value);
+        return scope;
     }
-    public void Assign(Token.Ident name, object value)
+    public object GetAt(int distance, Token.Ident name)
     {
-        for (var scope = this; scope != null; scope = scope.ParentScope)
-        {
-            if (scope.Variables.ContainsKey(name.Value))
-            {
-                scope.Variables[name.Value] = value;
-                return;
-            }
-        }
+        if (Ancestor(distance)!.Variables.TryGetValue(name.Value, out var value)) return value;
+        throw Error.Undefined(name.Index);
+    }
+    public void AssignAt(int distance, Token.Ident name, object value)
+    {
+        var vars = Ancestor(distance)!.Variables;
 
-        throw new Error($"Variable {name.Value} is not declared", name.Index);
+        if (!vars.ContainsKey(name.Value))
+            throw Error.Undefined(name.Index);
+
+        vars[name.Value] = value;
     }
 }

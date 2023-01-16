@@ -106,12 +106,12 @@ public override int Index {get=>_index;set=>_index=value;}
 public override int Length {get=>_length;set=>_length=value;}
 }
 public class Assign : Expr {
-public Expr.Variable RValue;
-public Expr LValue;
+public Expr Name;
+public Expr Value;
 int _index, _length;
-public Assign(Expr.Variable rvalue, Expr lvalue, int index, int length) {
-this.RValue = rvalue;
-this.LValue = lvalue;
+public Assign(Expr name, Expr value, int index, int length) {
+this.Name = name;
+this.Value = value;
 _index = index;
 _length = length;
 }
@@ -132,6 +132,20 @@ _index = index;
 _length = length;
 }
 public override T Accept<T>(IVisitor<T> visitor) => visitor.visitCall(this);
+public override int Index {get=>_index;set=>_index=value;}
+public override int Length {get=>_length;set=>_length=value;}
+}
+public class Property : Expr {
+public Token.Ident Name;
+public Expr Instance;
+int _index, _length;
+public Property(Token.Ident name, Expr instance, int index, int length) {
+this.Name = name;
+this.Instance = instance;
+_index = index;
+_length = length;
+}
+public override T Accept<T>(IVisitor<T> visitor) => visitor.visitProperty(this);
 public override int Index {get=>_index;set=>_index=value;}
 public override int Length {get=>_length;set=>_length=value;}
 }
@@ -173,6 +187,7 @@ T visitBoolean(Expr.Boolean expr);
 T visitVariable(Expr.Variable expr);
 T visitAssign(Expr.Assign expr);
 T visitCall(Expr.Call expr);
+T visitProperty(Expr.Property expr);
 T visitFunction(Expr.Function expr);
 T visitNil(Expr.Nil expr);
 }

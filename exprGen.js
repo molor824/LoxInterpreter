@@ -12,8 +12,9 @@ let expressions = {
     Float: { Value: "double" },
     Boolean: { Value: "bool" },
     Variable: { Name: "Token.Ident" },
-    Assign: { RValue: "Expr.Variable", LValue: "Expr" },
+    Assign: { Name: "Expr", Value: "Expr" },
     Call: { Callee: "Expr", Paren: "Token.Symbol", Args: "List<Expr>" },
+    Property: { Name: "Token.Ident", Instance: "Expr" },
     Function: { Parameters: "List<Token.Ident>", Body: "Stmt" },
     Nil: { _STR: 'return "nil";' },
 };

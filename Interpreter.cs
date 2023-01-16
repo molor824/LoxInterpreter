@@ -58,12 +58,14 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
             return output;
         }},
         {(typeof(string), "+", typeof(object)), (a, b) => (string)a + b},
+        {(typeof(object), "+", typeof(string)), (a, b) => a + (string)b},
         {(typeof(bool), "&&", typeof(bool)), (a, b) => (bool)a && (bool)b},
         {(typeof(bool), "||", typeof(bool)), (a, b) => (bool)a || (bool)b},
     };
     public static Expr.Nil NilVal = new(0, 0);
     public static Stopwatch Stopwatch = Stopwatch.StartNew();
     public static Environment Environment = new();
+    public static Dictionary<Expr, int> Locals = new();
     static bool Break, Continue;
     public static object? ReturnValue; // im not using exception for returning value, seems too insane and slow
     static int Loops;
@@ -78,11 +80,23 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
 
         InitNativeFunc();
     }
+    public static T TryCast<T>(object value, int index)
+    {
+        if (value is not T) throw new Error($"Cannot implicitly cast {value.GetType().Name} to {typeof(T).Name}", index);
+
+        return (T)value;
+    }
     public static void InitNativeFunc()
     {
-        Environment.RootScope.Declare("printf", new Printf(), 0);
-        Environment.RootScope.Declare("print", new Print(), 0);
-        Environment.RootScope.Declare("clock", new Clock(), 0);
+        Environment.RootScope.Declare(new("printf", 0, 0), new Printf());
+        Environment.RootScope.Declare(new("print", 0, 0), new Print());
+        Environment.RootScope.Declare(new("clock", 0, 0), new Clock());
+        Environment.RootScope.Declare(new("sprintf", 0, 0), new Sprintf());
+    }
+    public void Resolve(Expr expr, int depth)
+    {
+        if (Program.Debug) Console.WriteLine($"{expr.Accept(new AstPrinter())}, {depth}");
+        Locals.TryAdd(expr, depth);
     }
     public void Interpret(List<Stmt> statements)
     {
@@ -120,7 +134,7 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
     }
     Void Stmt.IVisitor<Void>.visitVarDecl(Stmt.VarDecl stmt)
     {
-        Environment.Declare(stmt.Name.Value, stmt.Expr.Accept(this), stmt.Name.Index);
+        Environment.Declare(stmt.Name, stmt.Expr.Accept(this));
         return new();
     }
     Void Stmt.IVisitor<Void>.visitIf(Stmt.If stmt)
@@ -226,6 +240,19 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
         Loops--;
         return new();
     }
+    public object visitProperty(Expr.Property expr)
+    {
+        var instance = expr.Instance.Accept(this);
+        if (instance is LoxInstance lInstance)
+        {
+            if (lInstance.Fields.TryGetValue(expr.Name.Value, out var value))
+                return value;
+            if (lInstance.ClassInfo.Methods.TryGetValue(expr.Name.Value, out var funcValue))
+                return funcValue;
+        }
+
+        throw Error.Property(expr.Name.Index);
+    }
     object Expr.IVisitor<object>.visitCall(Expr.Call expr)
     {
         var callee = expr.Callee.Accept(this);
@@ -233,19 +260,40 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
         if (callee is not ICallable callable) throw new Error("Expected method name", expr.Callee.Index);
 
         var args = new List<object>();
+
         foreach (var arg in expr.Args)
             args.Add(arg.Accept(this));
 
         if (callable.Arity >= 0 && callable.Arity != args.Count) throw new Error($"Function does not take {args.Count} parameters", expr.Callee.Index);
         else if (callable.Arity < 0 && ~callable.Arity > args.Count) throw new Error($"Function must have atleast {~callable.Arity} parameters", expr.Callee.Index);
 
-        return callable.Call(this, args);
+        return callable.Call(this, args, expr.Index);
     }
     object Expr.IVisitor<object>.visitAssign(Expr.Assign expr)
     {
-        var value = expr.LValue.Accept(this);
-        Environment.Assign(expr.RValue.Name, value);
+        var value = expr.Value.Accept(this);
+
+        if (expr.Name is Expr.Variable varExpr)
+        {
+            if (Locals.TryGetValue(expr, out var depth))
+                Environment.AssignAt(depth, varExpr.Name, value);
+            else Environment.RootScope.AssignAt(0, varExpr.Name, value);
+        }
+        else
+        {
+            var propertyExpr = (Expr.Property)expr.Name;
+            var property = (LoxInstance)(propertyExpr.Instance.Accept(this));
+
+            property.Set(propertyExpr.Name, value);
+        }
+
         return value;
+    }
+    public Void visitClass(Stmt.Class stmt)
+    {
+        Environment.Declare(stmt.Name, new LoxClass(stmt, this));
+
+        return new();
     }
     object Expr.IVisitor<object>.visitFunction(Expr.Function expr) => new LoxFunction(expr, Environment);
     object Expr.IVisitor<object>.visitBoolean(Expr.Boolean expr) => expr.Value;
@@ -254,7 +302,13 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
     object Expr.IVisitor<object>.visitString(Expr.String expr) => expr.Value;
     object Expr.IVisitor<object>.visitChar(Expr.Char expr) => expr.Value;
     object Expr.IVisitor<object>.visitNil(Expr.Nil expr) => expr;
-    object Expr.IVisitor<object>.visitVariable(Expr.Variable expr) => Environment.Get(expr.Name);
+    object Expr.IVisitor<object>.visitVariable(Expr.Variable expr)
+    {
+        if (Locals.TryGetValue(expr, out var depth))
+            return Environment.GetAt(depth, expr.Name);
+
+        return Environment.RootScope.GetAt(0, expr.Name);
+    }
     object Expr.IVisitor<object>.visitUnary(Expr.Unary expr)
     {
         var a = expr.Expr.Accept(this);
@@ -292,12 +346,7 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
             var result = value(a, b);
             return result;
         }
-        if (BinaryOperators.TryGetValue((typeof(object), expr.Op.Value, a.GetType()), out value))
-        {
-            var result = value(a, b);
-            return result;
-        }
-        if (BinaryOperators.TryGetValue((typeof(object), expr.Op.Value, typeof(object)), out value))
+        if (BinaryOperators.TryGetValue((typeof(object), expr.Op.Value, b.GetType()), out value))
         {
             var result = value(a, b);
             return result;

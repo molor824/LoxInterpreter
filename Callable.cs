@@ -1,29 +1,29 @@
 public interface ICallable
 {
     int Arity { get; }
-    object Call(Interpreter interpreter, List<object> args);
+    object Call(Interpreter interpreter, List<object> args, int index);
 }
 public class LoxFunction : ICallable
 {
-    public Expr.Function Declaration;
-    public Environment Closure;
+    Expr.Function _declaration;
+    Environment _closure;
     public LoxFunction(Expr.Function declaration, Environment closure)
     {
-        Declaration = declaration;
-        Closure = closure;
+        _declaration = declaration;
+        _closure = closure;
     }
-    public object Call(Interpreter interpreter, List<object> args)
+    public object Call(Interpreter interpreter, List<object> args, int index)
     {
         var old = Interpreter.Environment;
-        Interpreter.Environment = new Environment(Closure);
+        Interpreter.Environment = new Environment(_closure);
 
-        for (var i = 0; i < Declaration.Parameters.Count; i++)
+        for (var i = 0; i < _declaration.Parameters.Count; i++)
         {
-            var parameter = Declaration.Parameters[i];
-            Interpreter.Environment.Declare(parameter.Value, args[i], 0);
+            var parameter = _declaration.Parameters[i];
+            Interpreter.Environment.Declare(parameter, args[i]);
         }
 
-        Declaration.Body.Accept(interpreter);
+        _declaration.Body.Accept(interpreter);
 
         Interpreter.Environment = old;
 
@@ -32,16 +32,16 @@ public class LoxFunction : ICallable
 
         return returnVal ?? Interpreter.NilVal;
     }
-    public int Arity => Declaration.Parameters.Count;
+    public int Arity => _declaration.Parameters.Count;
 
     public override string ToString()
     {
         var parameters = "";
 
-        for (var i = 0; i < Declaration.Parameters.Count; i++)
+        for (var i = 0; i < _declaration.Parameters.Count; i++)
         {
             if (i != 0) parameters += ", ";
-            parameters += Declaration.Parameters[i].Value;
+            parameters += _declaration.Parameters[i].Value;
         }
 
         return $"func({parameters})";
@@ -50,26 +50,48 @@ public class LoxFunction : ICallable
 public class Clock : ICallable
 {
     public int Arity => 0;
-    public object Call(Interpreter interpreter, List<object> args) => Interpreter.Stopwatch.ElapsedMilliseconds;
+    public object Call(Interpreter interpreter, List<object> args, int index) => Interpreter.Stopwatch.ElapsedMilliseconds;
 }
 public class Printf : ICallable
 {
     public int Arity => -2; // -2 means it can have any amount of parameter. But there must be atleast 1
-    public object Call(Interpreter interpreter, List<object> args)
+    public object Call(Interpreter interpreter, List<object> args, int index)
     {
-        Console.WriteLine((string)args[0], args.Skip(1).ToArray());
+        try
+        {
+            Console.WriteLine(Interpreter.TryCast<string>(args[0], index), args.Skip(1).ToArray());
         return Interpreter.NilVal;
+        }
+        catch (Exception e)
+        {
+            throw new Error(e.Message, index);
+        }
     }
 }
 public class Print : ICallable
 {
     public int Arity => -1; // -1 means i can have any amount of parameter including none
-    public object Call(Interpreter interpreter, List<object> args)
+    public object Call(Interpreter interpreter, List<object> args, int index)
     {
         foreach (var arg in args)
             Console.Write(arg + " ");
         Console.WriteLine();
 
         return Interpreter.NilVal;
+    }
+}
+public class Sprintf : ICallable
+{
+    public int Arity => -2;
+    public object Call(Interpreter interpreter, List<object> args, int index)
+    {
+        try
+        {
+            return string.Format(Interpreter.TryCast<string>(args[0], index), args.Skip(1).ToArray());
+        }
+        catch (Exception e)
+        {
+            throw new Error(e.Message, index);
+        }
     }
 }

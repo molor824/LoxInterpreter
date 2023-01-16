@@ -104,10 +104,11 @@
 
             foreach (var e in errors)
                 Console.WriteLine(e.OutputError(source, path));
-            if (errors.Any()) return;
+            if (errors.Any()) continue;
 
             var parser = new Parser(tokens);
             var interpreter = new Interpreter();
+            var resolver = new Resolver(interpreter);
 
             try
             {
@@ -132,8 +133,12 @@
                         Console.WriteLine(stmt.Accept(printer));
                     }
 
-                    Console.WriteLine("\nInterpretation:");
+                    Console.WriteLine("\nResolving:");
                 }
+
+                resolver.Resolve(statements);
+
+                if (Debug) Console.WriteLine("\nInterpretation:");
 
                 interpreter.Interpret(statements);
             }

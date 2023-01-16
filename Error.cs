@@ -1,10 +1,28 @@
 ﻿public class Error : Exception
 {
+    public static Error Ident(int index) => new("Expected identifier", index);
+    public static Error Expression(int index) => new("Expected expression", index);
+    public static Error RightCurly(int index) => new("Expected '}'", index);
+    public static Error LeftCurly(int index) => new("Expected '{'", index);
+    public static Error RightBracket(int index) => new("Expected ')'", index);
+    public static Error LeftBracket(int index) => new("Expected '('", index);
+    public static Error Semicolon(int index) => new("Expected ';'", index);
+    public static Error ArgLimit(int index) => new($"Cannot have more than {ArgLimit} arguments", index);
+    public static Error SameField(int index) => new("Cannot have same field", index);
+    public static Error SameMethod(int index) => new("Cannot have same method", index);
+    public static Error MethodAssign(int index) => new($"Cannot assign as it is a method group", index);
+    public static Error Property(int index) => new("Property does not exist", index);
+    public static Error Declared(int index) => new("Variable is already declared", index);
+    public static Error Undefined(int index) => new("Variable is undefined", index);
+    public static Error ReadOwnInit(int index) => new("Cannot read in it's own initializer", index);
+
     public string Reason;
     public int Index;
 
     public string OutputError(string source, string? path)
     {
+        if (Index < 0) return $"Error: {Reason}";
+
         var (line, column) = GetLocation(source, Index);
         var lineCpy = line;
         var len = 0;
@@ -17,7 +35,7 @@
 
         return $"Error at: [{(path != null ? $"{Path.GetFullPath(path)}, " : "")}line: {line}, column: {column}]\n" +
         $"{line} | {GetLine(source, line)}\n" +
-        new string(' ', len + 2 + column) +
+        new string(' ', len + 3 + column) +
         $"^ {Reason}";
     }
 

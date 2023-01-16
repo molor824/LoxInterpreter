@@ -1,104 +1,204 @@
-public class AstPrinter : Expr.IVisitor<string>, Stmt.IVisitor<string>
+public class AstPrinter : Expr.IVisitor<Node<string>>, Stmt.IVisitor<Node<string>>
 {
-    string Expr.IVisitor<string>.visitFunction(Expr.Function stmt)
+    public Node<string> visitFunction(Expr.Function stmt)
     {
-        var parameters = "";
-        for (var i = 0; i < stmt.Parameters.Count; i++)
-        {
-            if (i != 0) parameters += ", ";
-            parameters += stmt.Parameters[i].Value;
-        }
+        var output = new Node<string>("func");
+        var parametersNode = new Node<string>("parameters", output);
 
-        return $"func({parameters}) {stmt.Body.Accept(this)}";
+        foreach (var parameter in stmt.Parameters)
+            new Node<string>(parameter.Value, parametersNode);
+
+        return output;
     }
-    string Stmt.IVisitor<string>.visitReturn(Stmt.Return stmt) => $"return {stmt.Value?.Accept(this)};";
-    string Stmt.IVisitor<string>.visitBlock(Stmt.Block stmt)
+    public Node<string> visitProperty(Expr.Property expr)
     {
-        var output = "{\n";
+        return new Node<string>(expr.Name.Value, expr.Instance.Accept(this));
+    }
+    public Node<string> visitClass(Stmt.Class stmt)
+    {
+        var output = new Node<string>($"class {stmt.Name}");
+        var fieldsNode = new Node<string>("fields", output);
+        var methodsNode = new Node<string>("methods", output);
+
+        foreach (var field in stmt.Fields)
+            field.Value.Accept(this).Parent = fieldsNode;
+        foreach (var method in stmt.Methods)
+            method.Value.Accept(this).Parent = methodsNode;
+
+        return output;
+    }
+    public Node<string> visitReturn(Stmt.Return stmt) => new Node<string>("return", stmt.Accept(this));
+    public Node<string> visitBlock(Stmt.Block stmt)
+    {
+        var output = new Node<string>("scope");
+
         foreach (var statement in stmt.Statements)
-        {
-            output += "  " + statement.Accept(this).Replace("\n", "\n  ") + '\n';
-        }
-        return output + "\n}";
-    }
-    string Stmt.IVisitor<string>.visitBreak(Stmt.Break stmt)
-    {
-        return "break;";
-    }
-    string Stmt.IVisitor<string>.visitContinue(Stmt.Continue stmt)
-    {
-        return "continue;";
-    }
-    string Stmt.IVisitor<string>.visitExpression(Stmt.Expression stmt)
-    {
-        return $"ExprStmt({stmt.Expr.Accept(this)})";
-    }
-    string Stmt.IVisitor<string>.visitFor(Stmt.For stmt)
-    {
-        return $"For({stmt.Initial?.Accept(this)};{stmt.Condition?.Accept(this)};{stmt.Increment?.Accept(this)}){stmt.LoopStmt.Accept(this)}{(stmt.ElseStmt != null ? " else " + stmt.ElseStmt.Accept(this) : "")}";
-    }
-    string Stmt.IVisitor<string>.visitIf(Stmt.If stmt)
-    {
-        return $"If({stmt.Condition.Accept(this)}) {stmt.MetStmt.Accept(this)}{(stmt.ElseStmt != null ? " else " + stmt.ElseStmt.Accept(this) : "")}";
-    }
-    string Stmt.IVisitor<string>.visitVarDecl(Stmt.VarDecl stmt)
-    {
-        return $"VarDeclare({stmt.Name.Value}, {stmt.Expr.Accept(this)})";
-    }
-    string Stmt.IVisitor<string>.visitWhile(Stmt.While stmt)
-    {
-        return $"While({stmt.Condition.Accept(this)}) {stmt.LoopStmt.Accept(this)}{(stmt.ElseStmt != null ? " else " + stmt.ElseStmt.Accept(this) : "")}";
-    }
-    string Expr.IVisitor<string>.visitCall(Expr.Call expr)
-    {
-        var args = "";
+            statement.Accept(this).Parent = output;
 
-        for (var i = 0; i < expr.Args.Count; i++)
+        return output;
+    }
+    public Node<string> visitBreak(Stmt.Break stmt) => new("break");
+    public Node<string> visitContinue(Stmt.Continue stmt) => new("continue");
+    public Node<string> visitExpression(Stmt.Expression stmt) => stmt.Expr.Accept(this);
+    public Node<string> visitFor(Stmt.For stmt)
+    {
+        var output = new Node<string>("for");
+
+        if (stmt.Initial != null) stmt.Initial.Accept(this).Parent = new("initial", output);
+        if (stmt.Condition != null) stmt.Condition.Accept(this).Parent = new("condition", output);
+        if (stmt.Increment != null) stmt.Increment.Accept(this).Parent = new("increment", output);
+
+        stmt.LoopStmt.Accept(this).Parent = new("loop", output);
+
+        if (stmt.ElseStmt != null) stmt.ElseStmt.Accept(this).Parent = new("else", output);
+
+        return output;
+    }
+    public Node<string> visitIf(Stmt.If stmt)
+    {
+        var output = new Node<string>("if");
+
+        stmt.Condition.Accept(this).Parent = new("condition", output);
+        stmt.MetStmt.Accept(this).Parent = new("met", output);
+        if (stmt.ElseStmt != null) stmt.ElseStmt.Accept(this).Parent = new("else", output);
+
+        return output;
+    }
+    public Node<string> visitVarDecl(Stmt.VarDecl stmt)
+    {
+        var output = new Node<string>("variable declaration");
+        new Node<string>(stmt.Name.Value, output);
+        stmt.Expr.Accept(this).Parent = output;
+
+        return output;
+    }
+    public Node<string> visitWhile(Stmt.While stmt)
+    {
+        var output = new Node<string>("while");
+        stmt.Condition.Accept(this).Parent = new("condition", output);
+        stmt.LoopStmt.Accept(this).Parent = new("loop", output);
+        if (stmt.ElseStmt != null) stmt.ElseStmt.Accept(this).Parent = new("else", output);
+
+        return output;
+    }
+    public Node<string> visitCall(Expr.Call expr)
+    {
+        var output = new Node<string>("call ");
+        expr.Callee.Accept(this).Parent = output;
+
+        var args = new Node<string>("arguments", output);
+
+        foreach (var arg in expr.Args)
+            arg.Accept(this).Parent = args;
+
+        return output;
+    }
+    public Node<string> visitAssign(Expr.Assign expr)
+    {
+        var output = new Node<string>("assign");
+        expr.Name.Accept(this).Parent = output;
+        expr.Value.Accept(this).Parent = output;
+
+        return output;
+    }
+    public Node<string> visitBinary(Expr.Binary expr)
+    {
+        var output = new Node<string>($"binary {expr.Op.Value}");
+        expr.Left.Accept(this).Parent = output;
+        expr.Right.Accept(this).Parent = output;
+
+        return output;
+    }
+    public Node<string> visitUnary(Expr.Unary expr)
+    {
+        var output = new Node<string>($"unary {expr.Op.Value}");
+        expr.Expr.Accept(this).Parent = output;
+
+        return output;
+    }
+    public Node<string> visitBoolean(Expr.Boolean expr) => new("bool " + expr.Value);
+    public Node<string> visitChar(Expr.Char expr) => new("char " + expr.Value);
+    public Node<string> visitString(Expr.String expr) => new("string " + expr.Value);
+    public Node<string> visitInteger(Expr.Integer expr) => new("int " + expr.Value);
+    public Node<string> visitFloat(Expr.Float expr) => new("float " + expr.Value);
+    public Node<string> visitNil(Expr.Nil _) => new("nil");
+    public Node<string> visitVariable(Expr.Variable expr) => new("variable " + expr.Name.Value);
+}
+public class Node<T>
+{
+    public static string LastChildPrint = "\u2514\u2500";
+    public static string ChildPrint = "\u251C\u2500";
+    public static string ChildMiddlePrint = "\u2502 ";
+    public static string LastChildMiddlePrint = "  ";
+
+    public T Value;
+    public Node<T>? Parent
+    {
+        get => _parent;
+        set
         {
-            if (i != 0) args += ", ";
-            args += expr.Args[i].Accept(this);
+            if (value == _parent) return;
+
+            _parent?._children.Remove(this);
+            value?._children.Add(this);
+
+            _parent = value;
+        }
+    }
+    public IReadOnlyList<Node<T>> Children => _children;
+
+    Node<T>? _parent;
+    List<Node<T>> _children = new();
+
+    public Node(T value)
+    {
+        Value = value;
+    }
+    public Node(T value, Node<T> parent)
+    {
+        Value = value;
+        Parent = parent;
+    }
+    public Node(T value, IEnumerable<Node<T>> children)
+    {
+        Value = value;
+        foreach (var child in children)
+        {
+            child.Parent = this;
+        }
+    }
+    public override string ToString()
+    {
+        var output = SelfToString();
+        foreach (var child in Children)
+        {
+            output += '\n' + child.ToString();
         }
 
-        return $"{expr.Callee.Accept(this)}({args})";
+        return output;
     }
-    string Expr.IVisitor<string>.visitAssign(Expr.Assign expr)
+    public string SelfToString()
     {
-        return $"Assign({expr.LValue.Accept(this)}, {expr.RValue.Accept(this)})";
-    }
-    string Expr.IVisitor<string>.visitBinary(Expr.Binary expr)
-    {
-        return $"Binary({expr.Op.Value}, {expr.Left.Accept(this)}, {expr.Right.Accept(this)})";
-    }
-    string Expr.IVisitor<string>.visitUnary(Expr.Unary expr)
-    {
-        return $"Unary({expr.Op.Value}, {expr.Expr.Accept(this)})";
-    }
-    string Expr.IVisitor<string>.visitBoolean(Expr.Boolean expr)
-    {
-        return $"Bool({expr.Value})";
-    }
-    string Expr.IVisitor<string>.visitChar(Expr.Char expr)
-    {
-        return $"Char({expr.Value})";
-    }
-    string Expr.IVisitor<string>.visitString(Expr.String expr)
-    {
-        return $"String({expr.Value})";
-    }
-    string Expr.IVisitor<string>.visitInteger(Expr.Integer expr)
-    {
-        return $"Int({expr.Value})";
-    }
-    string Expr.IVisitor<string>.visitFloat(Expr.Float expr)
-    {
-        return $"Float({expr.Value})";
-    }
-    string Expr.IVisitor<string>.visitNil(Expr.Nil expr)
-    {
-        return "nil";
-    }
-    string Expr.IVisitor<string>.visitVariable(Expr.Variable expr)
-    {
-        return $"Variable({expr.Name.Value})";
+        var output = "";
+        var parent = Parent;
+        var child = this;
+
+        while (parent != null)
+        {
+            var index = parent._children.FindIndex(n => n == child);
+
+            if (index == parent.Children.Count - 1)
+            {
+                if (child == this) output = LastChildPrint + output;
+                else output = LastChildMiddlePrint + output;
+            }
+            else if (child == this) output = ChildPrint + output;
+            else output = ChildMiddlePrint + output;
+
+            child = child!.Parent;
+            parent = parent.Parent;
+        }
+
+        return output + Value?.ToString();
     }
 }

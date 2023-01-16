@@ -112,6 +112,23 @@ public override T Accept<T>(IVisitor<T> visitor) => visitor.visitReturn(this);
 public override int Index{get=>_index;set=>_index=value;}
 public override int Length{get=>_length;set=>_length=value;}
 }
+public class Class : Stmt {
+public Token.Ident Name;
+public Dictionary<string, Stmt.VarDecl> Methods;
+public Dictionary<string, Stmt.VarDecl> Fields;
+int _index;
+int _length;
+public Class(Token.Ident name, Dictionary<string, Stmt.VarDecl> methods, Dictionary<string, Stmt.VarDecl> fields, int index, int length) {
+this.Name = name;
+this.Methods = methods;
+this.Fields = fields;
+_index = index;
+_length = length;
+}
+public override T Accept<T>(IVisitor<T> visitor) => visitor.visitClass(this);
+public override int Index{get=>_index;set=>_index=value;}
+public override int Length{get=>_length;set=>_length=value;}
+}
 public class Break : Stmt {
 int _index;
 int _length;
@@ -142,6 +159,7 @@ T visitIf(Stmt.If stmt);
 T visitWhile(Stmt.While stmt);
 T visitFor(Stmt.For stmt);
 T visitReturn(Stmt.Return stmt);
+T visitClass(Stmt.Class stmt);
 T visitBreak(Stmt.Break stmt);
 T visitContinue(Stmt.Continue stmt);
 }

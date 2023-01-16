@@ -8,7 +8,9 @@ precedence:
 7. expression
 
 program: declaration* EOF;
-declaration: varDecl | statement;
+declaration: varDecl | statement | funcDecl | classDecl;
+classDecl: 'class' IDENT '{' (varDecl | funcDecl)* '}';
+funcDecl: 'fn' IDENT parameters (block | expression); // syntax sugar for function
 parameters: '(' (IDENT ( ',' IDENT )*)? ')';
 varDecl: 'var' IDENT ('=' expression)? ';';
 statement: exprStmt | block | ifStmt | whileStmt | forStmt | breakStmt | continueStmt | returnStmt;
@@ -21,7 +23,7 @@ forStmt: 'for' (exprStmt | varDecl | ';') expression? ';' expression? statement 
 block: "{" declaration* "}";
 exprStmt: expression ';';
 expression: assignment;
-assignment: orLogic ('=' | '+=' | '-=' | '*=' | '/=' | '%=' | '||=' | '&&=') assignment | orLogic;
+assignment: (call '.')? IDENT ('=' | '+=' | '-=' | '*=' | '/=' | '%=' | '||=' | '&&=') assignment | orLogic;
 orLogic: andLogic ("||" andLogic)*;
 andLogic: equality ("&&" equality)*;
 equality: comparison (('==' | '!=') comparison)*;
@@ -30,7 +32,7 @@ term: factor (('+' | '-') factor)*;
 factor: unary (('*' | '/' | '%') unary)*;
 unary: ('!' | '-') unary | increment;
 increment: IDENT ('++' | '--') | call;
-call: primary ('(' arguments? ')')*;
+call: primary ('(' arguments? ')' | '.' IDENT)*;
 arguments: expression (',' expression)*;
-function: 'fn' parameters (block | '=>' expression);
+function: 'fn' parameters (block | expression);
 primary: NUMBER | STRING | 'true' | 'false' | 'nil' | '(' expression ')' | IDENT | function;
