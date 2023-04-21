@@ -11,7 +11,7 @@ let statements = {
     While: { Condition: "Expr", LoopStmt: "Stmt", ElseStmt: "Stmt?" },
     For: { Initial: "Stmt?", Condition: "Expr?", Increment: "Expr?", LoopStmt: "Stmt", ElseStmt: "Stmt?" },
     Return: { Value: "Expr?" },
-    Class: { Name: "Token.Ident", Methods: "Dictionary<string, Stmt.VarDecl>", Fields: "Dictionary<string, Stmt.VarDecl>" },
+    Class: { Name: "Token.Ident", Methods: "Dictionary<string, Stmt.VarDecl>", Fields: "Dictionary<string, Stmt.VarDecl>", BaseClass: "Expr.Variable?" },
     Break: {},
     Continue: {},
 };

@@ -116,12 +116,14 @@ public class Class : Stmt {
 public Token.Ident Name;
 public Dictionary<string, Stmt.VarDecl> Methods;
 public Dictionary<string, Stmt.VarDecl> Fields;
+public Expr.Variable? BaseClass;
 int _index;
 int _length;
-public Class(Token.Ident name, Dictionary<string, Stmt.VarDecl> methods, Dictionary<string, Stmt.VarDecl> fields, int index, int length) {
+public Class(Token.Ident name, Dictionary<string, Stmt.VarDecl> methods, Dictionary<string, Stmt.VarDecl> fields, Expr.Variable? baseclass, int index, int length) {
 this.Name = name;
 this.Methods = methods;
 this.Fields = fields;
+this.BaseClass = baseclass;
 _index = index;
 _length = length;
 }

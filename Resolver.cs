@@ -1,8 +1,17 @@
 public class Resolver : Stmt.IVisitor<Void>, Expr.IVisitor<Void>
 {
+    static Token.Ident ThisParam = new("this", 0, 0);
+    static Token.Ident BaseParam = new("base", 0, 0);
 
     Interpreter _interpreter;
     Stack<Dictionary<string, bool>> _scopes = new();
+    ScopeType _scopeType = ScopeType.Global;
+    enum ScopeType
+    {
+        Global,
+        Function,
+        Method
+    }
 
     public Resolver(Interpreter interpreter)
     {
@@ -71,8 +80,21 @@ public class Resolver : Stmt.IVisitor<Void>, Expr.IVisitor<Void>
         Declare(stmt.Name);
         Define(stmt.Name);
 
+        if (stmt.BaseClass != null)
+        {
+            if (stmt.Name.Value == stmt.BaseClass.Name.Value)
+                throw Error.SelfInheritance(stmt.BaseClass.Index);
+
+            stmt.BaseClass.Accept(this);
+        }
+
+        var old = _scopeType;
+        _scopeType = ScopeType.Method;
+
         foreach (var method in stmt.Methods)
             method.Value.Accept(this);
+
+        _scopeType = old;
 
         return new();
     }
@@ -120,12 +142,23 @@ public class Resolver : Stmt.IVisitor<Void>, Expr.IVisitor<Void>
     {
         _scopes.Push(new());
 
+        var old = _scopeType;
+        if (_scopeType != ScopeType.Method)
+            _scopeType = ScopeType.Function;
+        else
+        {
+            expr.Parameters.Insert(0, BaseParam);
+            expr.Parameters.Insert(0, ThisParam);
+        }
+
         foreach (var parameter in expr.Parameters)
         {
             Declare(parameter);
             Define(parameter);
         }
         expr.Body.Accept(this);
+
+        _scopeType = old;
 
         _scopes.Pop();
 
@@ -135,6 +168,11 @@ public class Resolver : Stmt.IVisitor<Void>, Expr.IVisitor<Void>
     {
         expr.Callee.Accept(this);
 
+        if (expr.Callee is Expr.Property prop)
+        {
+            expr.Args.Insert(0, new Expr.Property(BaseParam, prop.Instance, prop.Index, prop.Length));
+            expr.Args.Insert(0, prop.Instance);
+        }
         foreach (var arg in expr.Args) arg.Accept(this);
 
         return new();

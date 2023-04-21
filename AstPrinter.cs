@@ -8,6 +8,8 @@ public class AstPrinter : Expr.IVisitor<Node<string>>, Stmt.IVisitor<Node<string
         foreach (var parameter in stmt.Parameters)
             new Node<string>(parameter.Value, parametersNode);
 
+        stmt.Body.Accept(this).Parent = output;
+
         return output;
     }
     public Node<string> visitProperty(Expr.Property expr)
@@ -27,7 +29,14 @@ public class AstPrinter : Expr.IVisitor<Node<string>>, Stmt.IVisitor<Node<string
 
         return output;
     }
-    public Node<string> visitReturn(Stmt.Return stmt) => new Node<string>("return", stmt.Accept(this));
+    public Node<string> visitReturn(Stmt.Return stmt)
+    {
+        var output = new Node<string>("return");
+
+        if (stmt.Value != null) stmt.Value.Accept(this).Parent = output;
+
+        return output;
+    }
     public Node<string> visitBlock(Stmt.Block stmt)
     {
         var output = new Node<string>("scope");

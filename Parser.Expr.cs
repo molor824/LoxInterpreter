@@ -163,7 +163,6 @@ public partial class Parser
             {
                 var callExpr = (Expr.Call)Args(expr);
                 expr = callExpr;
-                if (callExpr.Callee is Expr.Property prop) callExpr.Args.Insert(0, prop.Instance);
             }
             else if (Match(t => t is Token.Symbol { Value: "." }, out result))
             {

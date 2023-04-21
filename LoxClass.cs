@@ -1,12 +1,21 @@
 public class LoxClass : ICallable
 {
-    public Stmt.Class ParserInfo;
+    public string Name;
+    public LoxClass? BaseClass;
     public Dictionary<string, ICallable> Methods = new();
     public Dictionary<string, object> Fields = new();
 
     public LoxClass(Stmt.Class parserInfo, Interpreter interpreter)
     {
-        ParserInfo = parserInfo;
+        Name = parserInfo.Name.Value;
+
+        if (parserInfo.BaseClass != null)
+        {
+            if (parserInfo.BaseClass.Accept(interpreter) is not LoxClass baseClass)
+                throw Error.BaseClass(parserInfo.BaseClass.Index);
+
+            BaseClass = baseClass;
+        }
 
         foreach (var method in parserInfo.Methods)
             Methods.Add(method.Key, (ICallable)method.Value.Expr.Accept(interpreter));
@@ -19,17 +28,27 @@ public class LoxClass : ICallable
         get
         {
             if (Methods.TryGetValue("__init", out var value))
-                return value.Arity - 1;
+                return value.Arity - 2;
 
             return 0;
         }
     }
     public object Call(Interpreter interpreter, List<object> args, int index)
     {
-        var instance = new LoxInstance(this);
+        var instance = new LoxInstance(this, null);
+        var classInfo = BaseClass;
+        var crntInstance = instance;
+
+        while (classInfo != null)
+        {
+            crntInstance.BaseInstance = new(classInfo, null);
+            crntInstance = crntInstance.BaseInstance;
+            classInfo = classInfo.BaseClass;
+        }
 
         if (Methods.TryGetValue("__init", out var value))
         {
+            args.Insert(0, (object?)instance.BaseInstance ?? Interpreter.NilVal);
             args.Insert(0, instance);
             value.Call(interpreter, args, index);
         }
@@ -39,36 +58,63 @@ public class LoxClass : ICallable
 
     public override string ToString()
     {
-        return $"{ParserInfo.Name.Value}";
+        return $"{Name}";
     }
 }
 public class LoxInstance
 {
     public LoxClass ClassInfo;
+    public LoxInstance? BaseInstance;
     public Dictionary<string, object> Fields;
 
-    public LoxInstance(LoxClass classInfo)
+    public LoxInstance(LoxClass classInfo, LoxInstance? baseInstance)
     {
         ClassInfo = classInfo;
+        BaseInstance = baseInstance;
         Fields = new(classInfo.Fields);
     }
     public object Get(Token.Ident name)
     {
-        if (Fields.TryGetValue(name.Value, out var value))
-            return value;
-        if (ClassInfo.Methods.TryGetValue(name.Value, out var funcValue))
-            return funcValue;
+        if (name.Value == "base") return (object?)BaseInstance ?? Interpreter.NilVal;
+
+        var instance = this;
+        while (instance != null)
+        {
+            if (instance.Fields.TryGetValue(name.Value, out var value))
+                return value;
+            if (instance.ClassInfo.Methods.TryGetValue(name.Value, out var funcValue))
+                return funcValue;
+            instance = instance.BaseInstance;
+        }
 
         throw Error.Property(name.Index);
     }
     public void Set(Token.Ident name, object value)
     {
-        if (ClassInfo.Methods.ContainsKey(name.Value))
-            throw Error.MethodAssign(name.Index);
-        if (!Fields.ContainsKey(name.Value))
-            throw Error.Property(name.Index);
+        if (name.Value == "base")
+        {
+            if (value is not LoxInstance newInstance || newInstance.ClassInfo != ClassInfo.BaseClass)
+                throw Error.WrongBaseClass(ClassInfo.BaseClass?.ToString() ?? "nil", name.Index);
 
-        Fields[name.Value] = value;
+            BaseInstance = newInstance;
+            return;
+        }
+
+        var instance = this;
+        while (instance != null)
+        {
+            if (instance.ClassInfo.Methods.ContainsKey(name.Value))
+                throw Error.MethodAssign(name.Index);
+            if (instance.Fields.ContainsKey(name.Value))
+            {
+                instance.Fields[name.Value] = value;
+                return;
+            }
+
+            instance = instance.BaseInstance;
+        }
+
+        throw Error.Property(name.Index);
     }
 
     public override string ToString()
@@ -82,6 +128,6 @@ public class LoxInstance
 
         output += '}';
 
-        return $"{ClassInfo.ParserInfo.Name.Value} {output}";
+        return $"{ClassInfo.Name} {output}";
     }
 }

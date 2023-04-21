@@ -24,7 +24,7 @@ public class Lexer
         // brackets
         "{", "}", "<", ">", "[", "]", "(", ")",
         // other
-        ",", ";", ".", "=", "<-",
+        ",", ";", ".", "=", "<-", ":",
     };
     private static int _maxLength;
 

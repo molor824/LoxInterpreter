@@ -1,6 +1,7 @@
 # My take on the Lox interpreter
+First lox interpreter made in C#
 
-* Example:
+# Example:
 ```go
 fn fib(n) {
     var a = 0.0;
@@ -37,22 +38,36 @@ anonymous functions are possible!!!
 ```
 ```go
 class Vector2 {
-    var x = 0;
-    var y = 0;
+    var x;
+    var y;
     fn __init(x, y) {
         this.x = x;
         this.y = y;
     }
-    fn clone() Vector2(this.x, this.y);
-    fn add(other) <- Vector2(this.x + other.x, this.y + other.y);
 }
-var a = Vector2(1, 1);
-var b = Vector2(2.3, -52E-2);
-print(a.add(b));
+class Vector3 : Vector2 {
+    var z;
+    fn __init(x, y, z) {
+        this.z = z;
+        base.__init(x, y);
+    }
+}
+
+var a = Vector2(3, 2);
+print(a);
+a = Vector3(6, 1, 2);
+print(a, a.base);
 ```
 ```
 Vector2 {
-    x = 3.3;
-    y = 0.48;
+  x = 3;
+  y = 2;
+}
+Vector3 {
+  z = 2;
+}
+Vector2 {
+  x = 6;
+  y = 1;
 }
 ```

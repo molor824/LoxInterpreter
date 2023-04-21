@@ -245,10 +245,7 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
         var instance = expr.Instance.Accept(this);
         if (instance is LoxInstance lInstance)
         {
-            if (lInstance.Fields.TryGetValue(expr.Name.Value, out var value))
-                return value;
-            if (lInstance.ClassInfo.Methods.TryGetValue(expr.Name.Value, out var funcValue))
-                return funcValue;
+            return lInstance.Get(expr.Name);
         }
 
         throw Error.Property(expr.Name.Index);
@@ -347,6 +344,11 @@ public class Interpreter : Expr.IVisitor<object>, Stmt.IVisitor<Void>
             return result;
         }
         if (BinaryOperators.TryGetValue((typeof(object), expr.Op.Value, b.GetType()), out value))
+        {
+            var result = value(a, b);
+            return result;
+        }
+        if (BinaryOperators.TryGetValue((typeof(object), expr.Op.Value, typeof(object)), out value))
         {
             var result = value(a, b);
             return result;

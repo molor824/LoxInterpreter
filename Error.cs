@@ -1,5 +1,8 @@
 ﻿public class Error : Exception
 {
+    public static Error WrongBaseClass(string type, int index) => new($"Expected {type}", index);
+    public static Error BaseClass(int index) => new("Expected class", index);
+    public static Error SelfInheritance(int index) => new("Cannot inherit itself", index);
     public static Error Ident(int index) => new("Expected identifier", index);
     public static Error Expression(int index) => new("Expected expression", index);
     public static Error RightCurly(int index) => new("Expected '}'", index);

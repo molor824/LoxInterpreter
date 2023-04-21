@@ -1,7 +1,6 @@
 partial class Parser
 {
     const int ArgLimit = 255;
-    static Token.Ident ThisParam = new("this", 0, 0);
     static Expr.Integer One = new(1, 0, 0);
 
     bool Match(Func<Token, bool> compare, out Token result)
@@ -39,7 +38,16 @@ partial class Parser
         if (!Match(t => t is Token.Ident { Value: "class" }, out var result)) return false;
 
         var name = Consume(t => t is Token.Ident, Error.Ident(result.Index + result.Length));
-        var classStmt = new Stmt.Class((Token.Ident)name, new(), new(), result.Index, name.Index + name.Length - result.Index);
+        var classStmt = new Stmt.Class((Token.Ident)name, new(), new(), null, result.Index, name.Index + name.Length - result.Index);
+
+        if (Match(t => t is Token.Symbol { Value: ":" }, out result))
+        {
+            if (!Primary(out var expr)) throw Error.Ident(result.Index);
+            if (expr is not Expr.Variable varExpr) throw Error.Ident(result.Index);
+
+            classStmt.BaseClass = varExpr;
+        }
+
         result = Consume(t => t is Token.Symbol { Value: "{" }, Error.LeftCurly(name.Index + name.Length));
 
         while (true)
@@ -54,10 +62,6 @@ partial class Parser
             else if (FuncDecl(out stmt))
             {
                 var varDecl = (Stmt.VarDecl)stmt;
-                var funcExpr = (Expr.Function)varDecl.Expr;
-                var parameters = funcExpr.Parameters;
-
-                parameters.Insert(0, Parser.ThisParam);
 
                 if (!classStmt.Methods.TryAdd(varDecl.Name.Value, varDecl))
                     throw Error.SameMethod(varDecl.Name.Index);
@@ -169,7 +173,7 @@ partial class Parser
         if (!Statement(out var loopStmt)) throw Error.LeftCurly(result.Index + 1);
 
         var whileStmt = new Stmt.While(condition, loopStmt, null, result.Index, loopStmt.Index + loopStmt.Length - result.Index);
-        if (!Match(t => t is Token.Ident { Value: "else" }, out var result1))
+        if (Match(t => t is Token.Ident { Value: "else" }, out var result1))
         {
             if (!Statement(out var elseStmt)) throw Error.LeftCurly(whileStmt.Index + whileStmt.Length);
 

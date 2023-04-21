@@ -9,7 +9,7 @@ precedence:
 
 program: declaration* EOF;
 declaration: varDecl | statement | funcDecl | classDecl;
-classDecl: 'class' IDENT '{' (varDecl | funcDecl)* '}';
+classDecl: 'class' IDENT (: IDENT)? '{' (varDecl | funcDecl)* '}';
 funcDecl: 'fn' IDENT parameters (block | expression); // syntax sugar for function
 parameters: '(' (IDENT ( ',' IDENT )*)? ')';
 varDecl: 'var' IDENT ('=' expression)? ';';
